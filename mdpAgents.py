@@ -35,24 +35,41 @@ import random
 import game
 import util
 
-def getValidActions(grid, x, y):
-    # possible directions to move
-    directions = { Directions.NORTH: (0, 1),
+def printGrid(grid):
+    for column in list(reversed(grid)):
+        print " ".join(map(str,column))
+    print ""
+
+# keyvalue of directions and their movement vectors
+directions =     { Directions.NORTH: (0, 1),
                    Directions.SOUTH: (0, -1),
                    Directions.EAST:  (1, 0),
                    Directions.WEST:  (-1, 0),
                    Directions.STOP:  (0, 0)  }
 
+def applyAction(x, y, direction):
+    vector = directions[direction]
+    return (x + vector[0], y + vector[1])
+
+
+def getValidActions(grid, x, y):
     validActions = []
     # iterate over possible actions
     for action, vector in directions.iteritems():
         # apply vector movement to current x and y
-        # current cell == grid[y][x]
-        nextCell = grid[y + vector[1]][x + vector[0]]
+        (nextX, nextY) = applyAction(x, y, action)
+
+        try:
+            nextCell = grid[nextY][nextX]
+        except IndexError:
+            # edge of the map
+            continue
+
         # valid move if the next cell isn't a wall
         if nextCell != "w": validActions.append(action)
 
     return validActions
+
 
 
 def getPerpendicularActions(action):
@@ -65,14 +82,43 @@ def getPerpendicularActions(action):
     elif action == Directions.WEST:
         return [ Directions.SOUTH, Directions.NORTH ]
     else:
-        print "No perpendicular actions"
+        # action == Directions.STOP
         return []
 
 
-def printGrid(grid):
-    for column in list(reversed(grid)):
-        print " ".join(map(str,column))
-    print ""
+
+
+def getExpectedUtilityOfValidActions(x, y, validActions, utilityGrid):
+    # Probability that Pacman carries out the intended action
+    directionProb = 0.8
+    # Probability that Pacman carries out a perpendicular action
+    perpendicularActionProbability = 0.5 * (1 - directionProb)
+
+
+    actionExpectedUtilities = {}
+    for action in validActions:
+        if action == Directions.STOP:
+            actionExpectedUtilities[action] = utilityGrid[y][x]
+            continue
+
+        actionGridCoordinate = applyAction(x, y, action)
+        actionExpectedUtilities[action] = utilityGrid[actionGridCoordinate[1]][actionGridCoordinate[0]] * directionProb
+        
+        for perpendicularAction in getPerpendicularActions(action):
+            perpendicularGridCoordinate = applyAction(x, y, perpendicularAction)
+            perpendicularUtility = utilityGrid[perpendicularGridCoordinate[1]][perpendicularGridCoordinate[0]] * perpendicularActionProbability
+            actionExpectedUtilities[action] = actionExpectedUtilities[action] + perpendicularUtility
+    
+    return actionExpectedUtilities
+
+
+
+
+
+discountFactor = 0.1
+# reward for non-terminal states
+# this is an incentive for taking the shortest route
+reward = -0.04
 
 class Grid():
     def __init__(self, state):
@@ -105,15 +151,46 @@ class Grid():
 
         for (x,y) in api.ghosts(self.state):
             utilityGrid[int(y)][int(x)] = -1
-        
+
+        for (x,y) in api.food(self.state):
+            utilityGrid[y][x] = 10
+
         # threshold to stop iterations
         errorThreshold = 0
-        # maximum error found so far
-        maxError = -1
-        while errorThreshold > maxError:
-            for column in utilityGrid:
-                for cell in column:
-                    oldUtility = cell
+        # number of iterations adjusting the error
+        iterations = 0
+
+        done = False
+        while not done:
+            iterations = iterations + 1
+            # maximum error found so far
+            maxError = -1
+
+            for column in range(len(utilityGrid)):
+                for row in range(len(utilityGrid[0])):
+                    oldUtility = utilityGrid[column][row]
+
+                    validActions = getValidActions(self.entityGrid, row, column)
+                    expectedUtilityActions = getExpectedUtilityOfValidActions(row, column, validActions, utilityGrid)
+                    
+                    # if edge of board with no valid moves
+                    if not expectedUtilityActions.values():
+                        continue
+
+                    newUtility = reward + (discountFactor * max(expectedUtilityActions.values()))
+
+                    # update utility grid with new utility
+                    utilityGrid[column][row] = newUtility
+                    # print newUtility
+
+                    currError = abs(newUtility - oldUtility)
+                    maxError = max(currError, maxError)
+            
+            if maxError <= errorThreshold:
+                done = True            
+        
+        print "iterations"
+        print iterations
 
         return utilityGrid
 
@@ -136,11 +213,6 @@ class MDPAgent(Agent):
     # This is what gets run in between multiple games
     def final(self, state):
         print "Looks like the game just ended!"
-        grid = Grid(state)
-        printGrid(grid.getEntityGrid())
-
-        utilityGrid = grid.generateUtilityGrid()
-        printGrid(utilityGrid)
 
 
     # For now I just move randomly
@@ -152,66 +224,10 @@ class MDPAgent(Agent):
             legal.remove(Directions.STOP)
         # Random choice between the legal options.      
         grid = Grid(state)
+
+        printGrid(grid.getEntityGrid())
+
+        utilityGrid = grid.generateUtilityGrid()
+        printGrid(utilityGrid)
+
         return api.makeMove(random.choice(legal), legal)
-
-    # value iteration MDP
-
-    # 
-    discountFactor = 0.01
-
-    # Probability that Pacman carries out the intended action
-    directionProb = 0.8
-    # Probability that Pacman carries out a perpendicular action
-    perpendicularActionProbability = 0.5 * (1 - directionProb)
-    
-    # reward for non-terminal states
-    # this is an incentive for taking the shortest route
-    reward = -0.04
-
-    # utility value of each fruit
-    # maybe each fruit utility is a fraction of 1?
-    foodUtility = 1
-
-    # utility value of each ghost
-    # maybe each ghost utility should be a fraction of -1?
-    ghostUtility = -1
-
-
-
-
-    
-    
-
-    def getKeyFromValue(self, dict, value):
-        for k, v in dict.items():
-            if v == value:
-                return k
-        raise ValueError("No key found")
-
-
-    def getExpectedUtilityOfState(self, state):
-        validActions = getValidActions(state)
-        expectedUtility = {}
-
-        # cache a few recursive calls to make it more performant?
-        for action in validActions:
-            nextState = applyActionOnState(state, action)
-            nextStateUtility = getExpectedUtilityOfState(nextState)
-
-            # probability of intended action times its utility
-            expectedUtility[action] = directionProb * expectedUtility[action]
-
-            # probability of perpendicular actions times their utilities
-            perpendicularActions = getPerpendicularActions(action)
-            for pAction in perpendicularActions:
-                expectedUtility[pAction] += perpendicularActionProbability * expectedUtility[pAction]
-
-        
-
-        # the rational action is the one that maximizes the expected utility
-        rationalAction = getKeyFromValue(max(expectedUtility.values()))
-
-        utility = reward + (discountFactor * rationalAction)
-
-        print "utility of state", expectedUtility
-        return expectedUtility
