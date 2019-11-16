@@ -123,9 +123,9 @@ def getReward(grid, x, y):
     reward = -0.04
 
     if grid[y][x] == "g":
-        reward += -10
+        reward += -100
     elif grid[y][x] == "f":
-        reward += 10
+        reward += 100
     
     return reward
 
@@ -191,7 +191,6 @@ class Grid():
 
                     # update utility grid with new utility
                     utilityGrid[column][row] = newUtility
-                    # print newUtility
 
                     currError = abs(newUtility - oldUtility)
                     maxError = max(currError, maxError)
@@ -227,17 +226,18 @@ class MDPAgent(Agent):
 
     # For now I just move randomly
     def getAction(self, state):
-        # Get the actions we can try, and remove "STOP" if that is one of them.
-        legal = api.legalActions(state)
-        # print state.legalActions(state)
-        if Directions.STOP in legal:
-            legal.remove(Directions.STOP)
-        # Random choice between the legal options.      
         grid = Grid(state)
-
-        printGrid(grid.getEntityGrid())
-
         utilityGrid = grid.generateUtilityGrid()
-        printGrid(utilityGrid)
 
-        return api.makeMove(random.choice(legal), legal)
+        validActionUtilities = {}
+        (x, y) = api.whereAmI(state)
+        for action in getValidActions(grid.getEntityGrid(), x, y):
+            if action == Directions.STOP: continue
+            (newX, newY) = applyAction(x,y, action)
+            validActionUtilities[action] = utilityGrid[newY][newX]
+        
+        printGrid(grid.getEntityGrid())
+        printGrid(utilityGrid)
+        
+        rationalMove = max(validActionUtilities, key=validActionUtilities.get)
+        return api.makeMove(rationalMove, validActionUtilities.keys())
