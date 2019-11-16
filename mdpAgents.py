@@ -69,10 +69,6 @@ def getPerpendicularActions(action):
         return []
 
 
-def applyActionOnState(state, action):
-    print "applying action on state"
-
-
 def printGrid(grid):
     for column in list(reversed(grid)):
         print " ".join(map(str,column))
@@ -111,12 +107,13 @@ class Grid():
             utilityGrid[int(y)][int(x)] = -1
         
         # threshold to stop iterations
-        # delta = 0
-        # deltaSmallerAfterIteration = False
-        # while not deltaSmallerAfterIteration:
-        #     for column in self.grid:
-        #         for cell in column:
-        #             oldUtility = cell
+        errorThreshold = 0
+        # maximum error found so far
+        maxError = -1
+        while errorThreshold > maxError:
+            for column in utilityGrid:
+                for cell in column:
+                    oldUtility = cell
 
         return utilityGrid
 
