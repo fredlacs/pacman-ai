@@ -55,20 +55,18 @@ def getPerpendicularActions(action):
 def applyActionOnState(state, action):
     print "applying action on state"
 
-# class UtilityGrid(Grid):
 
-
-
-
-
-        
+def printGrid(grid):
+    for column in list(reversed(grid)):
+        print " ".join(map(str,column))
+    print ""
 
 class Grid():
     def __init__(self, state):
+        self.state = state
         # initialize 2d array with correct dimensions
         (w, h) = api.corners(state)[3]
         self.entityGrid = [[" " for x in range(w+1)] for y in range(h+1)]
-        self.utilityGrid = [[0 for x in range(w+1)] for y in range(h+1)]
 
         # populate known information
         (x,y) = api.whereAmI(state)
@@ -85,22 +83,15 @@ class Grid():
 
         for (x,y) in api.walls(state):
             self.entityGrid[y][x] = "w"
-
-    def printEntityGrid(self):
-        print "Print entityGrid"
-        for column in list(reversed(self.entityGrid)):
-            print ' '.join(column)
-        print "Done"
+    
+    def getEntityGrid(self):
+        return self.entityGrid
 
     def generateUtilityGrid(self):
-        utilityGrid = [[0 for x in range(len(self.entityGrid))] for y in range(len(self.entityGrid))]
+        utilityGrid = [[0 for x in range(len(self.entityGrid[0]))] for y in range(len(self.entityGrid))]
 
-        print "griid"
-        for column in list(reversed(self.utilityGrid)):
-            print ' '.join(str(column))
-
-        # for (x,y) in api.ghosts(state):
-        #     self.grid[int(y)][int(x)] = -1
+        for (x,y) in api.ghosts(self.state):
+            utilityGrid[int(y)][int(x)] = -1
         
         # threshold to stop iterations
         # delta = 0
@@ -109,6 +100,8 @@ class Grid():
         #     for column in self.grid:
         #         for cell in column:
         #             oldUtility = cell
+
+        return utilityGrid
 
 
 class MDPAgent(Agent):
@@ -124,16 +117,16 @@ class MDPAgent(Agent):
         print "Running registerInitialState for MDPAgent!"
         print "I'm at:"
         grid = Grid(state)
-        grid.printEntityGrid()
         
         
     # This is what gets run in between multiple games
     def final(self, state):
         print "Looks like the game just ended!"
         grid = Grid(state)
-        grid.printEntityGrid()
+        printGrid(grid.getEntityGrid())
 
-        grid.generateUtilityGrid()
+        utilityGrid = grid.generateUtilityGrid()
+        printGrid(utilityGrid)
 
 
     # For now I just move randomly
@@ -145,11 +138,7 @@ class MDPAgent(Agent):
             legal.remove(Directions.STOP)
         # Random choice between the legal options.      
         grid = Grid(state)
-        grid.printEntityGrid()
         return api.makeMove(random.choice(legal), legal)
-
-
-
 
     # value iteration MDP
 
