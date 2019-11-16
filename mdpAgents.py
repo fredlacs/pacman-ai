@@ -116,9 +116,18 @@ def getExpectedUtilityOfValidActions(x, y, validActions, utilityGrid):
 
 
 discountFactor = 0.1
-# reward for non-terminal states
-# this is an incentive for taking the shortest route
-reward = -0.04
+
+def getReward(grid, x, y):
+    # reward for non-terminal states
+    # this is an incentive for taking the shortest route
+    reward = -0.04
+
+    if grid[y][x] == "g":
+        reward += -10
+    elif grid[y][x] == "f":
+        reward += 10
+    
+    return reward
 
 class Grid():
     def __init__(self, state):
@@ -176,7 +185,8 @@ class Grid():
                     # if edge of board with no valid moves
                     if not expectedUtilityActions.values():
                         continue
-
+                    
+                    reward = getReward(self.entityGrid, row, column)
                     newUtility = reward + (discountFactor * max(expectedUtilityActions.values()))
 
                     # update utility grid with new utility
