@@ -35,8 +35,25 @@ import random
 import game
 import util
 
-# def getValidActions(grid, location):
-        
+def getValidActions(grid, x, y):
+    # possible directions to move
+    directions = { Directions.NORTH: (0, 1),
+                   Directions.SOUTH: (0, -1),
+                   Directions.EAST:  (1, 0),
+                   Directions.WEST:  (-1, 0),
+                   Directions.STOP:  (0, 0)  }
+
+    validActions = []
+    # iterate over possible actions
+    for action, vector in directions.iteritems():
+        # apply vector movement to current x and y
+        # current cell == grid[y][x]
+        nextCell = grid[y + vector[1]][x + vector[0]]
+        # valid move if the next cell isn't a wall
+        if nextCell != "w": validActions.append(action)
+
+    return validActions
+
 
 def getPerpendicularActions(action):
     if action == Directions.NORTH:
