@@ -70,12 +70,14 @@ def getPerpendicularDirections(direction):
 def getReward(grid, x, y):
     # reward for non-terminal states
     # this is an incentive for taking the shortest route
-    reward = -0.04
+    reward = -5.04
 
     if grid[y][x] == "g":
         reward += -100
     elif grid[y][x] == "f":
         reward += 100
+    elif grid[y][x] == "w":
+        reward = 0
     
     return reward
 
@@ -125,7 +127,7 @@ class MDPAgent(Agent):
         utilityGrid = [[0 for x in range(len(entityGrid[0]))] for y in range(len(entityGrid))]
 
         # threshold to stop iterations
-        errorThreshold = 0
+        errorThreshold = 0.5
         # number of iterations adjusting the error
         iterations = 0
 
