@@ -72,50 +72,20 @@ def getValidActions(grid, x, y):
 
 
 
-def getPerpendicularActions(action):
-    if action == Directions.NORTH:
+def getPerpendicularDirections(direction):
+    if direction == Directions.NORTH:
         return [ Directions.WEST, Directions.EAST ]
-    elif action == Directions.EAST:
+    elif direction == Directions.EAST:
         return [ Directions.NORTH, Directions.SOUTH ]
-    elif action == Directions.SOUTH:
+    elif direction == Directions.SOUTH:
         return [ Directions.EAST, Directions.WEST ]
-    elif action == Directions.WEST:
+    elif direction == Directions.WEST:
         return [ Directions.SOUTH, Directions.NORTH ]
     else:
-        # action == Directions.STOP
+        # direction == Directions.STOP
         return []
 
 
-
-
-def getExpectedUtilityOfValidActions(x, y, validActions, utilityGrid):
-    # Probability that Pacman carries out the intended action
-    directionProb = 0.8
-    # Probability that Pacman carries out a perpendicular action
-    perpendicularActionProbability = 0.5 * (1 - directionProb)
-
-
-    actionExpectedUtilities = {}
-    for action in validActions:
-        if action == Directions.STOP:
-            actionExpectedUtilities[action] = utilityGrid[y][x]
-            continue
-
-        actionGridCoordinate = applyAction(x, y, action)
-        actionExpectedUtilities[action] = utilityGrid[actionGridCoordinate[1]][actionGridCoordinate[0]] * directionProb
-        
-        for perpendicularAction in getPerpendicularActions(action):
-            perpendicularGridCoordinate = applyAction(x, y, perpendicularAction)
-            perpendicularUtility = utilityGrid[perpendicularGridCoordinate[1]][perpendicularGridCoordinate[0]] * perpendicularActionProbability
-            actionExpectedUtilities[action] = actionExpectedUtilities[action] + perpendicularUtility
-    
-    return actionExpectedUtilities
-
-
-
-
-
-discountFactor = 0.1
 
 def getReward(grid, x, y):
     # reward for non-terminal states
@@ -129,40 +99,50 @@ def getReward(grid, x, y):
     
     return reward
 
-class Grid():
-    def __init__(self, state):
-        self.state = state
+class MDPAgent(Agent):
+
+    # Constructor: this gets run when we first invoke pacman.py
+    def __init__(self):
+        print "Starting up MDPAgent!"
+        self.name = "Pacman"
+
+    # Gets run after an MDPAgent object is created and once there is
+    # game state to access.
+    def registerInitialState(self, state):
+        print "Running registerInitialState for MDPAgent!"
+        print "I'm at:"
+        
+    # This is what gets run in between multiple games
+    def final(self, state):
+        print "Looks like the game just ended!"
+
+
+    def generateEntityGrid(self, state):
         # initialize 2d array with correct dimensions
         (w, h) = api.corners(state)[3]
-        self.entityGrid = [[" " for x in range(w+1)] for y in range(h+1)]
+        entityGrid = [[" " for x in range(w+1)] for y in range(h+1)]
 
         # populate known information
         (x,y) = api.whereAmI(state)
-        self.entityGrid[y][x] = "p"
+        entityGrid[y][x] = "p"
 
         for (x,y) in api.food(state):
-            self.entityGrid[y][x] = "f"
+            entityGrid[y][x] = "f"
 
         for (x,y) in api.capsules(state):
-            self.entityGrid[y][x] = "c"
+            entityGrid[y][x] = "c"
 
         for (x,y) in api.ghosts(state):
-            self.entityGrid[int(y)][int(x)] = "g"
+            entityGrid[int(y)][int(x)] = "g"
 
         for (x,y) in api.walls(state):
-            self.entityGrid[y][x] = "w"
+            entityGrid[y][x] = "w"
+        
+        return entityGrid
+
     
-    def getEntityGrid(self):
-        return self.entityGrid
-
-    def generateUtilityGrid(self):
-        utilityGrid = [[0 for x in range(len(self.entityGrid[0]))] for y in range(len(self.entityGrid))]
-
-        for (x,y) in api.ghosts(self.state):
-            utilityGrid[int(y)][int(x)] = -1
-
-        for (x,y) in api.food(self.state):
-            utilityGrid[y][x] = 10
+    def generateUtilityGrid(self, entityGrid):
+        utilityGrid = [[0 for x in range(len(entityGrid[0]))] for y in range(len(entityGrid))]
 
         # threshold to stop iterations
         errorThreshold = 0
@@ -178,15 +158,49 @@ class Grid():
             for column in range(len(utilityGrid)):
                 for row in range(len(utilityGrid[0])):
                     oldUtility = utilityGrid[column][row]
+                    expectedUtilityActions = {}
 
-                    validActions = getValidActions(self.entityGrid, row, column)
-                    expectedUtilityActions = getExpectedUtilityOfValidActions(row, column, validActions, utilityGrid)
-                    
-                    # if edge of board with no valid moves
-                    if not expectedUtilityActions.values():
-                        continue
-                    
-                    reward = getReward(self.entityGrid, row, column)
+                    for direction in directions:
+                        nextCoordinate = applyAction(row, column, direction)
+                        
+                        # Probability that Pacman carries out the intended action
+                        directionProb = 0.8
+                        # Probability that Pacman carries out a perpendicular action
+                        perpendicularActionProbability = 0.5 * (1 - directionProb)
+
+
+                        # move is invalid if out of grid or into a wall
+                        if (
+                            nextCoordinate[0] < 0 or nextCoordinate[1] < 0 or
+                            nextCoordinate[0] >= len(utilityGrid[0]) or
+                            nextCoordinate[1] >= len(utilityGrid) or
+                            entityGrid[nextCoordinate[1]][nextCoordinate[0]] == "w"
+                           ):
+                            # invalid move means agent remains on same square
+                            expectedUtilityActions[direction] = directionProb * utilityGrid[column][row]
+                        else:
+                            # move is valid and agents utility is of new position
+                            expectedUtilityActions[direction] = directionProb * utilityGrid[nextCoordinate[1]][nextCoordinate[0]]
+                        
+                        # add expected utility of perpendicular actions
+                        for perpendicularDirection in getPerpendicularDirections(direction):
+                            perpendicularGridCoordinate = applyAction(row, column, perpendicularDirection)
+                            if (
+                                nextCoordinate[0] < 0 or nextCoordinate[1] < 0 or
+                                nextCoordinate[0] >= len(utilityGrid[0]) or
+                                nextCoordinate[1] >= len(utilityGrid) or
+                                entityGrid[nextCoordinate[1]][nextCoordinate[0]] == "w"
+                              ):
+                                # if not a walkable square agent remains in same position
+                                expectedUtilityActions[direction] = perpendicularActionProbability * utilityGrid[column][row]
+                            else:
+                                # if walkable movement, calculate expected utility of target position
+                                perpendicularUtility = utilityGrid[perpendicularGridCoordinate[1]][perpendicularGridCoordinate[0]] * perpendicularActionProbability
+                                expectedUtilityActions[direction] = expectedUtilityActions[direction] + perpendicularUtility
+
+                    reward = getReward(entityGrid, row, column)
+                    discountFactor = 0.1
+
                     newUtility = reward + (discountFactor * max(expectedUtilityActions.values()))
 
                     # update utility grid with new utility
@@ -204,39 +218,20 @@ class Grid():
         return utilityGrid
 
 
-class MDPAgent(Agent):
-
-    # Constructor: this gets run when we first invoke pacman.py
-    def __init__(self):
-        print "Starting up MDPAgent!"
-        self.name = "Pacman"
-
-    # Gets run after an MDPAgent object is created and once there is
-    # game state to access.
-    def registerInitialState(self, state):
-        print "Running registerInitialState for MDPAgent!"
-        print "I'm at:"
-        grid = Grid(state)
-        
-        
-    # This is what gets run in between multiple games
-    def final(self, state):
-        print "Looks like the game just ended!"
-
-
     # For now I just move randomly
     def getAction(self, state):
-        grid = Grid(state)
-        utilityGrid = grid.generateUtilityGrid()
+        entityGrid = self.generateEntityGrid(state)
+        print entityGrid
+        utilityGrid = self.generateUtilityGrid(entityGrid)
 
         validActionUtilities = {}
         (x, y) = api.whereAmI(state)
-        for action in getValidActions(grid.getEntityGrid(), x, y):
+        for action in api.legalActions(state):
             if action == Directions.STOP: continue
             (newX, newY) = applyAction(x,y, action)
             validActionUtilities[action] = utilityGrid[newY][newX]
         
-        printGrid(grid.getEntityGrid())
+        printGrid(entityGrid)
         printGrid(utilityGrid)
         
         rationalMove = max(validActionUtilities, key=validActionUtilities.get)
