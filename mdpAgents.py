@@ -52,26 +52,6 @@ def applyAction(x, y, direction):
     return (x + vector[0], y + vector[1])
 
 
-def getValidActions(grid, x, y):
-    validActions = []
-    # iterate over possible actions
-    for action, vector in directions.iteritems():
-        # apply vector movement to current x and y
-        (nextX, nextY) = applyAction(x, y, action)
-
-        try:
-            nextCell = grid[nextY][nextX]
-        except IndexError:
-            # edge of the map
-            continue
-
-        # valid move if the next cell isn't a wall
-        if nextCell != "w": validActions.append(action)
-
-    return validActions
-
-
-
 def getPerpendicularDirections(direction):
     if direction == Directions.NORTH:
         return [ Directions.WEST, Directions.EAST ]
@@ -199,7 +179,7 @@ class MDPAgent(Agent):
                                 expectedUtilityActions[direction] = expectedUtilityActions[direction] + perpendicularUtility
 
                     reward = getReward(entityGrid, row, column)
-                    discountFactor = 0.1
+                    discountFactor = 0.7
 
                     newUtility = reward + (discountFactor * max(expectedUtilityActions.values()))
 
@@ -218,16 +198,14 @@ class MDPAgent(Agent):
         return utilityGrid
 
 
-    # For now I just move randomly
     def getAction(self, state):
         entityGrid = self.generateEntityGrid(state)
-        print entityGrid
         utilityGrid = self.generateUtilityGrid(entityGrid)
 
         validActionUtilities = {}
         (x, y) = api.whereAmI(state)
         for action in api.legalActions(state):
-            if action == Directions.STOP: continue
+            # if action == Directions.STOP: continue
             (newX, newY) = applyAction(x,y, action)
             validActionUtilities[action] = utilityGrid[newY][newX]
         
