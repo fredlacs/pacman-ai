@@ -66,20 +66,9 @@ def getPerpendicularDirections(direction):
         return []
 
 
+def manhattanDistance(x1, y1, x2, y2):
+    return int(abs(x1 - x2) + abs(y1 - y2))
 
-def getReward(grid, x, y):
-    # reward for non-terminal states
-    # this is an incentive for taking the shortest route
-    reward = -5.04
-
-    if grid[y][x] == "g":
-        reward += -100
-    elif grid[y][x] == "f":
-        reward += 100
-    elif grid[y][x] == "w":
-        reward = 0
-    
-    return reward
 
 class MDPAgent(Agent):
 
@@ -97,6 +86,54 @@ class MDPAgent(Agent):
     # This is what gets run in between multiple games
     def final(self, state):
         print "Looks like the game just ended!"
+
+    def floodFill(self, grid, x, y, iterationsLeft):
+        if iterationsLeft > 0:
+            try:
+                grid[y][x] = -103
+            except Exception:
+                return
+            self.floodFill(grid, x, y+1, iterationsLeft -1)
+            self.floodFill(grid, x, y-1, iterationsLeft -1)
+            self.floodFill(grid, x+1, y, iterationsLeft -1)
+            self.floodFill(grid, x-1, y, iterationsLeft -1)
+
+
+    def generateRewardGrid(self, state):
+        # a negative incentive for non-terminal states
+        # this is an incentive for taking the shortest route
+        initialValue = -5
+        # initialize 2d array with correct dimensions
+        (w, h) = api.corners(state)[3]
+        rewardGrid = [[initialValue for x in range(w+1)] for y in range(h+1)]
+
+        ghosts = api.ghosts(state)
+        foods = api.food(state)
+        walls = api.walls(state)
+
+
+
+        for (x,y) in foods:
+            rewardGrid[y][x] = 100
+
+            # ghostRadius = 5 if len(foods) < 3 else 1
+            # for (ghostX, ghostY) in ghosts:
+            #     # if manhattanDistance(ghostX, ghostY, x, y) < ghostRadius:
+            #     if manhattanDistance(ghostX, ghostY, x, y) < 5:
+            #         rewardGrid[y][x] = -703
+
+        for (x,y) in ghosts:
+            rewardGrid[int(y)][int(x)] = -100
+
+            radius = 5 if len(foods) > 3 else 2
+            self.floodFill(rewardGrid, int(x),int(y), 2)
+            
+                    
+
+        for (x,y) in walls:
+            rewardGrid[y][x] = 0
+
+        return rewardGrid
 
 
     def generateEntityGrid(self, state):
@@ -123,11 +160,12 @@ class MDPAgent(Agent):
         return entityGrid
 
     
-    def generateUtilityGrid(self, entityGrid):
+    def generateUtilityGrid(self, entityGrid, rewardGrid):
         utilityGrid = [[0 for x in range(len(entityGrid[0]))] for y in range(len(entityGrid))]
 
+        discountFactor = 0.8
         # threshold to stop iterations
-        errorThreshold = 0.5
+        errorThreshold = 0.1
         # number of iterations adjusting the error
         iterations = 0
 
@@ -153,7 +191,8 @@ class MDPAgent(Agent):
 
                         # move is invalid if out of grid or into a wall
                         if (
-                            nextCoordinate[0] < 0 or nextCoordinate[1] < 0 or
+                            nextCoordinate[0] < 0 or
+                            nextCoordinate[1] < 0 or
                             nextCoordinate[0] >= len(utilityGrid[0]) or
                             nextCoordinate[1] >= len(utilityGrid) or
                             entityGrid[nextCoordinate[1]][nextCoordinate[0]] == "w"
@@ -168,7 +207,8 @@ class MDPAgent(Agent):
                         for perpendicularDirection in getPerpendicularDirections(direction):
                             perpendicularGridCoordinate = applyAction(row, column, perpendicularDirection)
                             if (
-                                nextCoordinate[0] < 0 or nextCoordinate[1] < 0 or
+                                nextCoordinate[0] < 0 or
+                                nextCoordinate[1] < 0 or
                                 nextCoordinate[0] >= len(utilityGrid[0]) or
                                 nextCoordinate[1] >= len(utilityGrid) or
                                 entityGrid[nextCoordinate[1]][nextCoordinate[0]] == "w"
@@ -180,8 +220,7 @@ class MDPAgent(Agent):
                                 perpendicularUtility = utilityGrid[perpendicularGridCoordinate[1]][perpendicularGridCoordinate[0]] * perpendicularActionProbability
                                 expectedUtilityActions[direction] = expectedUtilityActions[direction] + perpendicularUtility
 
-                    reward = getReward(entityGrid, row, column)
-                    discountFactor = 0.7
+                    reward = rewardGrid[column][row]
 
                     newUtility = reward + (discountFactor * max(expectedUtilityActions.values()))
 
@@ -202,17 +241,19 @@ class MDPAgent(Agent):
 
     def getAction(self, state):
         entityGrid = self.generateEntityGrid(state)
-        utilityGrid = self.generateUtilityGrid(entityGrid)
+        rewardGrid = self.generateRewardGrid(state)
+        utilityGrid = self.generateUtilityGrid(entityGrid, rewardGrid)
 
         validActionUtilities = {}
         (x, y) = api.whereAmI(state)
         for action in api.legalActions(state):
-            # if action == Directions.STOP: continue
+            if action == Directions.STOP: continue
             (newX, newY) = applyAction(x,y, action)
             validActionUtilities[action] = utilityGrid[newY][newX]
         
         printGrid(entityGrid)
-        printGrid(utilityGrid)
+        # printGrid(utilityGrid)
+        printGrid(rewardGrid)
         
         rationalMove = max(validActionUtilities, key=validActionUtilities.get)
         return api.makeMove(rationalMove, validActionUtilities.keys())
