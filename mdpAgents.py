@@ -87,16 +87,16 @@ class MDPAgent(Agent):
     def final(self, state):
         print "Looks like the game just ended!"
 
-    def floodFill(self, grid, x, y, iterationsLeft):
-        if iterationsLeft > 0:
+    def floodFill(self, grid, x, y, depth):
+        if depth > 0:
             try:
                 grid[y][x] = -103
             except Exception:
                 return
-            self.floodFill(grid, x, y+1, iterationsLeft -1)
-            self.floodFill(grid, x, y-1, iterationsLeft -1)
-            self.floodFill(grid, x+1, y, iterationsLeft -1)
-            self.floodFill(grid, x-1, y, iterationsLeft -1)
+            self.floodFill(grid, x, y+1, depth-1)
+            self.floodFill(grid, x, y-1, depth-1)
+            self.floodFill(grid, x+1, y, depth-1)
+            self.floodFill(grid, x-1, y, depth-1)
 
 
     def generateRewardGrid(self, state):
@@ -111,24 +111,15 @@ class MDPAgent(Agent):
         foods = api.food(state)
         walls = api.walls(state)
 
-
-
         for (x,y) in foods:
             rewardGrid[y][x] = 100
-
-            # ghostRadius = 5 if len(foods) < 3 else 1
-            # for (ghostX, ghostY) in ghosts:
-            #     # if manhattanDistance(ghostX, ghostY, x, y) < ghostRadius:
-            #     if manhattanDistance(ghostX, ghostY, x, y) < 5:
-            #         rewardGrid[y][x] = -703
 
         for (x,y) in ghosts:
             rewardGrid[int(y)][int(x)] = -100
 
-            radius = 5 if len(foods) > 3 else 2
-            self.floodFill(rewardGrid, int(x),int(y), 2)
-            
-                    
+            radius = 7 if len(foods) > 3 else 2
+            # fills a radius around each ghost with negative reward
+            self.floodFill(rewardGrid, int(x),int(y), radius)
 
         for (x,y) in walls:
             rewardGrid[y][x] = 0
@@ -163,7 +154,7 @@ class MDPAgent(Agent):
     def generateUtilityGrid(self, entityGrid, rewardGrid):
         utilityGrid = [[0 for x in range(len(entityGrid[0]))] for y in range(len(entityGrid))]
 
-        discountFactor = 0.8
+        discountFactor = 0.9
         # threshold to stop iterations
         errorThreshold = 0.1
         # number of iterations adjusting the error
