@@ -76,6 +76,7 @@ class MDPAgent(Agent):
     def __init__(self):
         print "Starting up MDPAgent!"
         self.name = "Pacman"
+        self.utilityGrid = None
 
     # Gets run after an MDPAgent object is created and once there is
     # game state to access.
@@ -117,7 +118,7 @@ class MDPAgent(Agent):
         for (x,y) in ghosts:
             rewardGrid[int(y)][int(x)] = -100
 
-            radius = 7 if len(foods) > 3 else 2
+            radius = 5 if len(foods) > 3 else 2
             # fills a radius around each ghost with negative reward
             self.floodFill(rewardGrid, int(x),int(y), radius)
 
@@ -151,8 +152,10 @@ class MDPAgent(Agent):
         return entityGrid
 
     
-    def generateUtilityGrid(self, entityGrid, rewardGrid):
-        utilityGrid = [[0 for x in range(len(entityGrid[0]))] for y in range(len(entityGrid))]
+    def generateUtilityGrid(self, entityGrid, rewardGrid, utilityGrid=None):
+        # if starting utility grid not provided, initialize all values to 0
+        if not utilityGrid:
+            utilityGrid = [[0 for x in range(len(entityGrid[0]))] for y in range(len(entityGrid))]
 
         discountFactor = 0.9
         # threshold to stop iterations
@@ -233,17 +236,18 @@ class MDPAgent(Agent):
     def getAction(self, state):
         entityGrid = self.generateEntityGrid(state)
         rewardGrid = self.generateRewardGrid(state)
-        utilityGrid = self.generateUtilityGrid(entityGrid, rewardGrid)
+        # pass old utility grid to initialize value iteration with an approximation
+        self.utilityGrid = self.generateUtilityGrid(entityGrid, rewardGrid, self.utilityGrid)
 
         validActionUtilities = {}
         (x, y) = api.whereAmI(state)
         for action in api.legalActions(state):
             if action == Directions.STOP: continue
             (newX, newY) = applyAction(x,y, action)
-            validActionUtilities[action] = utilityGrid[newY][newX]
+            validActionUtilities[action] = self.utilityGrid[newY][newX]
         
         printGrid(entityGrid)
-        # printGrid(utilityGrid)
+        printGrid(self.utilityGrid)
         printGrid(rewardGrid)
         
         rationalMove = max(validActionUtilities, key=validActionUtilities.get)
