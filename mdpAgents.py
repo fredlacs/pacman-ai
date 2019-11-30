@@ -35,40 +35,6 @@ import random
 import game
 import util
 
-def printGrid(grid):
-    for column in list(reversed(grid)):
-        print " ".join(map(str,column))
-    print ""
-
-# keyvalue of directions and their movement vectors
-directions =     { Directions.NORTH: (0, 1),
-                   Directions.SOUTH: (0, -1),
-                   Directions.EAST:  (1, 0),
-                   Directions.WEST:  (-1, 0),
-                   Directions.STOP:  (0, 0)  }
-
-def applyAction(x, y, direction):
-    vector = directions[direction]
-    return (x + vector[0], y + vector[1])
-
-
-def getPerpendicularDirections(direction):
-    if direction == Directions.NORTH:
-        return [ Directions.WEST, Directions.EAST ]
-    elif direction == Directions.EAST:
-        return [ Directions.NORTH, Directions.SOUTH ]
-    elif direction == Directions.SOUTH:
-        return [ Directions.EAST, Directions.WEST ]
-    elif direction == Directions.WEST:
-        return [ Directions.SOUTH, Directions.NORTH ]
-    else:
-        # direction == Directions.STOP
-        return []
-
-
-def manhattanDistance(x1, y1, x2, y2):
-    return int(abs(x1 - x2) + abs(y1 - y2))
-
 
 class MDPAgent(Agent):
 
@@ -77,6 +43,13 @@ class MDPAgent(Agent):
         print "Starting up MDPAgent!"
         self.name = "Pacman"
         self.utilityGrid = None
+        # keyvalue of directions and their movement vectors
+        self.directions =     { Directions.NORTH: (0, 1),
+                                Directions.SOUTH: (0, -1),
+                                Directions.EAST:  (1, 0),
+                                Directions.WEST:  (-1, 0),
+                                Directions.STOP:  (0, 0)  }
+
 
     # Gets run after an MDPAgent object is created and once there is
     # game state to access.
@@ -84,20 +57,34 @@ class MDPAgent(Agent):
         print "Running registerInitialState for MDPAgent!"
         print "I'm at:"
         
+
     # This is what gets run in between multiple games
     def final(self, state):
         print "Looks like the game just ended!"
 
-    def floodFill(self, grid, x, y, depth):
-        if depth > 0:
-            try:
-                grid[y][x] = -103
-            except Exception:
-                return
-            self.floodFill(grid, x, y+1, depth-1)
-            self.floodFill(grid, x, y-1, depth-1)
-            self.floodFill(grid, x+1, y, depth-1)
-            self.floodFill(grid, x-1, y, depth-1)
+
+    def generateEntityGrid(self, state):
+        # initialize 2d array with correct dimensions
+        (w, h) = api.corners(state)[3]
+        entityGrid = [[" " for x in range(w+1)] for y in range(h+1)]
+
+        # populate known information
+        (x,y) = api.whereAmI(state)
+        entityGrid[y][x] = "p"
+
+        for (x,y) in api.food(state):
+            entityGrid[y][x] = "f"
+
+        for (x,y) in api.capsules(state):
+            entityGrid[y][x] = "c"
+
+        for (x,y) in api.ghosts(state):
+            entityGrid[int(y)][int(x)] = "g"
+
+        for (x,y) in api.walls(state):
+            entityGrid[y][x] = "w"
+        
+        return entityGrid
 
 
     def generateRewardGrid(self, state):
@@ -126,32 +113,8 @@ class MDPAgent(Agent):
             rewardGrid[y][x] = 0
 
         return rewardGrid
-
-
-    def generateEntityGrid(self, state):
-        # initialize 2d array with correct dimensions
-        (w, h) = api.corners(state)[3]
-        entityGrid = [[" " for x in range(w+1)] for y in range(h+1)]
-
-        # populate known information
-        (x,y) = api.whereAmI(state)
-        entityGrid[y][x] = "p"
-
-        for (x,y) in api.food(state):
-            entityGrid[y][x] = "f"
-
-        for (x,y) in api.capsules(state):
-            entityGrid[y][x] = "c"
-
-        for (x,y) in api.ghosts(state):
-            entityGrid[int(y)][int(x)] = "g"
-
-        for (x,y) in api.walls(state):
-            entityGrid[y][x] = "w"
-        
-        return entityGrid
-
     
+
     def generateUtilityGrid(self, entityGrid, rewardGrid, utilityGrid=None):
         # if starting utility grid not provided, initialize all values to 0
         if not utilityGrid:
@@ -174,8 +137,8 @@ class MDPAgent(Agent):
                     oldUtility = utilityGrid[column][row]
                     expectedUtilityActions = {}
 
-                    for direction in directions:
-                        nextCoordinate = applyAction(row, column, direction)
+                    for direction in self.directions:
+                        nextCoordinate = self.applyAction(row, column, direction)
                         
                         # Probability that Pacman carries out the intended action
                         directionProb = 0.8
@@ -198,8 +161,8 @@ class MDPAgent(Agent):
                             expectedUtilityActions[direction] = directionProb * utilityGrid[nextCoordinate[1]][nextCoordinate[0]]
                         
                         # add expected utility of perpendicular actions
-                        for perpendicularDirection in getPerpendicularDirections(direction):
-                            perpendicularGridCoordinate = applyAction(row, column, perpendicularDirection)
+                        for perpendicularDirection in self.getPerpendicularDirections(direction):
+                            perpendicularGridCoordinate = self.applyAction(row, column, perpendicularDirection)
                             if (
                                 nextCoordinate[0] < 0 or
                                 nextCoordinate[1] < 0 or
@@ -243,12 +206,57 @@ class MDPAgent(Agent):
         (x, y) = api.whereAmI(state)
         for action in api.legalActions(state):
             if action == Directions.STOP: continue
-            (newX, newY) = applyAction(x,y, action)
+            (newX, newY) = self.applyAction(x,y, action)
             validActionUtilities[action] = self.utilityGrid[newY][newX]
         
-        printGrid(entityGrid)
-        printGrid(self.utilityGrid)
-        printGrid(rewardGrid)
+        self.printGrid(entityGrid)
+        self.printGrid(self.utilityGrid)
+        self.printGrid(rewardGrid)
         
         rationalMove = max(validActionUtilities, key=validActionUtilities.get)
         return api.makeMove(rationalMove, validActionUtilities.keys())
+
+
+
+    ## Utility functions 
+
+
+    def printGrid(self, grid):
+        for column in list(reversed(grid)):
+            print " ".join(map(str,column))
+        print ""
+
+
+    def applyAction(self, x, y, direction):
+        vector = self.directions[direction]
+        return (x + vector[0], y + vector[1])
+
+
+    def getPerpendicularDirections(self, direction):
+        if direction == Directions.NORTH:
+            return [ Directions.WEST, Directions.EAST ]
+        elif direction == Directions.EAST:
+            return [ Directions.NORTH, Directions.SOUTH ]
+        elif direction == Directions.SOUTH:
+            return [ Directions.EAST, Directions.WEST ]
+        elif direction == Directions.WEST:
+            return [ Directions.SOUTH, Directions.NORTH ]
+        else:
+            # direction == Directions.STOP
+            return []
+
+
+    def manhattanDistance(self, x1, y1, x2, y2):
+        return int(abs(x1 - x2) + abs(y1 - y2))
+
+
+    def floodFill(self, grid, x, y, depth):
+        if depth > 0:
+            try:
+                grid[y][x] = -103
+            except Exception:
+                return
+            self.floodFill(grid, x, y+1, depth-1)
+            self.floodFill(grid, x, y-1, depth-1)
+            self.floodFill(grid, x+1, y, depth-1)
+            self.floodFill(grid, x-1, y, depth-1)
