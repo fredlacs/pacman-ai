@@ -164,11 +164,11 @@ class MDPAgent(Agent):
                         for perpendicularDirection in self.getPerpendicularDirections(direction):
                             perpendicularGridCoordinate = self.applyAction(row, column, perpendicularDirection)
                             if (
-                                nextCoordinate[0] < 0 or
-                                nextCoordinate[1] < 0 or
-                                nextCoordinate[0] >= len(utilityGrid[0]) or
-                                nextCoordinate[1] >= len(utilityGrid) or
-                                entityGrid[nextCoordinate[1]][nextCoordinate[0]] == "w"
+                                perpendicularGridCoordinate[0] < 0 or
+                                perpendicularGridCoordinate[1] < 0 or
+                                perpendicularGridCoordinate[0] >= len(utilityGrid[0]) or
+                                perpendicularGridCoordinate[1] >= len(utilityGrid)
+                                # entityGrid[perpendicularGridCoordinate[1]][perpendicularGridCoordinate[0]] == "w"
                               ):
                                 # if not a walkable square agent remains in same position
                                 expectedUtilityActions[direction] = perpendicularActionProbability * utilityGrid[column][row]
